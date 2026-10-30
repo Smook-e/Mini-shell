@@ -1,14 +1,4 @@
 
-/*
- *
- *
- * Template file.
- * You will need to add more code here to execute the command table.
- *
- * NOTE: You are responsible for fixing any bugs this code may have!
- *
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -494,9 +484,11 @@ void prompt()
 Command Command::_currentCommand;
 SimpleCommand *Command::_currentSimpleCommand;
 
+#ifndef COMMAND_TEST_BUILD
 int main()
 {
     setupSignals();
     prompt();
     return 0;
 }
+#endif

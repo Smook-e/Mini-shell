@@ -1,0 +1,36 @@
+echo "starting myshell command test"
+pwd
+echo "plain arguments and quoted arguments"
+echo one two three
+echo "text with spaces"
+ls
+ls -1
+echo *.cc
+echo command.?
+cat README.md
+cat README.md | wc -l
+cat README.md | grep shell
+echo "input file contents" > /tmp/myshell_test_input.txt
+cat < /tmp/myshell_test_input.txt
+echo "first output line" > /tmp/myshell_test_output.txt
+echo "second output line" >> /tmp/myshell_test_output.txt
+cat /tmp/myshell_test_output.txt
+wc -l < /tmp/myshell_test_output.txt
+ls /path/that/does/not/exist >>& /tmp/myshell_test_errors.txt
+cat /tmp/myshell_test_errors.txt
+echo "stdout and stderr test" >>& /tmp/myshell_test_combined.txt
+cat /tmp/myshell_test_combined.txt
+echo "pipeline with multiple commands" | tr a-z A-Z | wc -c
+printf "alpha\nbeta\ngamma\n" | grep beta
+printf "one\ntwo\nthree\n" | wc -l
+cd .
+pwd
+sleep 1 &
+echo "background command submitted"
+echo "unmatched wildcard: *.not_a_real_extension"
+echo "finished myshell command test"
+rm -f /tmp/myshell_test_input.txt
+rm -f /tmp/myshell_test_output.txt
+rm -f /tmp/myshell_test_errors.txt
+rm -f /tmp/myshell_test_combined.txt
+exit
