@@ -44,6 +44,31 @@ Commands can also be provided through standard input:
 printf 'echo hello\nexit\n' | ./myshell
 ```
 
+## Testing
+
+Build and run the C++ test suite with:
+
+```sh
+make test
+```
+
+The test suite in [command_tests.cc](command_tests.cc) directly tests:
+
+- Tokenization and command parsing
+- Invalid syntax handling
+- Pipelines and output redirection
+- Built-in `cd`
+- Wildcard expansion, including unmatched wildcards
+- External command execution
+
+For a broader end-to-end shell run, [test_commands.txt](test_commands.txt)
+contains commands covering quoting, pipelines, redirection, wildcard
+expansion, background execution, errors, and cleanup. Run it with:
+
+```sh
+./myshell < test_commands.txt
+```
+
 ## Supported features
 
 ### Built-in commands
