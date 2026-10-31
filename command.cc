@@ -278,10 +278,10 @@ void Command::print() const
                 _background ? "YES" : "NO");
 }
 
-bool builtin(const SimpleCommand &command)
+int runBuiltin(const SimpleCommand &command)
 {
     if (command.argumentCount() == 0)
-        return false;
+        return -1;
 
     const std::vector<std::string> &arguments = command.arguments();
     if (arguments[0] == "exit")
@@ -291,30 +291,45 @@ bool builtin(const SimpleCommand &command)
     }
 
     if (arguments[0] != "cd")
-        return false;
+        return -1;
 
     if (arguments.size() > 2)
     {
         std::fprintf(stderr, "cd: too many arguments\n");
-        return true;
+        return 1;
     }
 
     const char *directory = arguments.size() == 1
                                 ? std::getenv("HOME")
                                 : arguments[1].c_str();
     if (!directory)
+    {
         std::fprintf(stderr, "cd: HOME not set\n");
+        return 1;
+    }
     else if (chdir(directory) != 0)
+    {
         std::fprintf(stderr, "cd: %s: %s\n", directory, std::strerror(errno));
-    return true;
+        return 1;
+    }
+    return 0;
 }
 
-void Command::execute()
+bool builtin(const SimpleCommand &command)
 {
-    if (_simpleCommands.size() == 1 && builtin(_simpleCommands.front()))
+    return runBuiltin(command) >= 0;
+}
+
+int Command::execute()
+{
+    if (_simpleCommands.size() == 1)
     {
-        clear();
-        return;
+        const int status = runBuiltin(_simpleCommands.front());
+        if (status >= 0)
+        {
+            clear();
+            return status;
+        }
     }
 
     int previousRead = -1;
@@ -392,6 +407,7 @@ void Command::execute()
     if (previousRead >= 0)
         close(previousRead);
 
+    int exitStatus = _background ? 0 : 1;
     if (!_background && lastPid > 0)
     {
         int status;
@@ -400,10 +416,15 @@ void Command::execute()
         {
         }
         if (result > 0)
+        {
             logChild(result, status);
+            exitStatus = WIFEXITED(status) ? WEXITSTATUS(status)
+                                           : 128 + WTERMSIG(status);
+        }
     }
 
     clear();
+    return exitStatus;
 }
 
 void prompt()
@@ -438,11 +459,84 @@ void prompt()
         const std::string input(line);
         std::free(line);
         const std::vector<Token> tokens = tokenize(input);
-        Command *command = parse(tokens);
-        if (command)
+
+        bool validCommandList = true;
+        bool previousWasSeparator = true;
+        TokenType lastSeparator = TOKEN_SEQUENCE;
+        for (const Token &token : tokens)
         {
-            command->execute();
+            if (token.type == TOKEN_EOF)
+                break;
+
+            const bool isSeparator = token.type == TOKEN_SEQUENCE ||
+                                     token.type == TOKEN_AND ||
+                                     token.type == TOKEN_OR;
+            if (!isSeparator)
+            {
+                previousWasSeparator = false;
+                continue;
+            }
+
+            if (previousWasSeparator)
+            {
+                std::fprintf(stderr, "myshell: unexpected separator '%s'\n",
+                             token.value.c_str());
+                validCommandList = false;
+                break;
+            }
+            previousWasSeparator = true;
+            lastSeparator = token.type;
+        }
+        if (validCommandList && previousWasSeparator &&
+            (lastSeparator == TOKEN_AND || lastSeparator == TOKEN_OR))
+        {
+            std::fprintf(stderr, "myshell: missing command after '%s'\n",
+                         lastSeparator == TOKEN_AND ? "&&" : "||");
+            validCommandList = false;
+        }
+        if (!validCommandList)
+            continue;
+
+        std::size_t commandStart = 0;
+        TokenType connector = TOKEN_SEQUENCE;
+        int previousStatus = 0;
+        bool havePreviousCommand = false;
+
+        for (std::size_t i = 0; i < tokens.size(); ++i)
+        {
+            const TokenType type = tokens[i].type;
+            const bool isSeparator = type == TOKEN_SEQUENCE ||
+                                     type == TOKEN_AND || type == TOKEN_OR ||
+                                     type == TOKEN_EOF;
+            if (!isSeparator)
+                continue;
+
+            if (i == commandStart)
+            {
+                std::fprintf(stderr, "myshell: missing command near '%s'\n",
+                             tokens[i].value.empty() ? "end of line"
+                                                     : tokens[i].value.c_str());
+                break;
+            }
+
+            std::vector<Token> commandTokens(tokens.begin() + commandStart,
+                                             tokens.begin() + i);
+            commandTokens.push_back({TOKEN_EOF, ""});
+            Command *command = parse(commandTokens);
+            if (!command)
+                break;
+
+            const bool shouldRun =
+                !havePreviousCommand || connector == TOKEN_SEQUENCE ||
+                (connector == TOKEN_AND && previousStatus == 0) ||
+                (connector == TOKEN_OR && previousStatus != 0);
+            if (shouldRun)
+                previousStatus = command->execute();
             delete command;
+
+            havePreviousCommand = true;
+            connector = type;
+            commandStart = i + 1;
         }
     }
 }

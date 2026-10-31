@@ -30,6 +30,12 @@ std::vector<Token> tokenize(const std::string &input)
             token.type = TOKEN_ERROR;
         else if (word == ">>&")
             token.type = TOKEN_REDIRECT_AND_ERROR;
+        else if (word == ";")
+            token.type = TOKEN_SEQUENCE;
+        else if (word == "&&")
+            token.type = TOKEN_AND;
+        else if (word == "||")
+            token.type = TOKEN_OR;
         else if (tokens.empty() || tokens.back().type == TOKEN_PIPE)
             token.type = TOKEN_COMMAND;
         else
@@ -90,10 +96,38 @@ std::vector<Token> tokenize(const std::string &input)
 
             addToken();
         }
-        else if (c == '|' || c == '<' || c == '&')
+        else if (c == ';')
         {
             addToken();
-            word = c;
+            word = ";";
+            addToken();
+        }
+        else if (c == '|')
+        {
+            addToken();
+            if (i + 1 < input.size() && input[i + 1] == '|')
+            {
+                word = "||";
+                ++i;
+            }
+            else
+            {
+                word = "|";
+            }
+            addToken();
+        }
+        else if (c == '&')
+        {
+            addToken();
+            if (i + 1 < input.size() && input[i + 1] == '&')
+            {
+                word = "&&";
+                ++i;
+            }
+            else
+            {
+                word = "&";
+            }
             addToken();
         }
         else
@@ -107,4 +141,3 @@ std::vector<Token> tokenize(const std::string &input)
 
     return tokens;
 }
-

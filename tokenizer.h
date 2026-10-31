@@ -16,6 +16,9 @@ enum TokenType
     TOKEN_PIPE,       
     TOKEN_BACKGROUND, 
     TOKEN_REDIRECT_AND_ERROR,
+    TOKEN_SEQUENCE,
+    TOKEN_AND,
+    TOKEN_OR,
     TOKEN_EOF,       
 };
 

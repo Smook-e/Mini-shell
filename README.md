@@ -122,6 +122,21 @@ sleep 2 &
 
 Child-process completion information is recorded in `shell.log`.
 
+### Command lists
+
+Multiple commands can be combined with these operators:
+
+- `;` always runs the next command.
+- `&&` runs the next command only if the previous command succeeds.
+- `||` runs the next command only if the previous command fails.
+
+The operators are evaluated from left to right:
+
+```sh
+make && echo "build succeeded" || echo "build failed"
+echo first; echo second
+```
+
 ### Wildcard expansion
 
 Wildcard expansion follows the csh-style behavior required by the assignment:

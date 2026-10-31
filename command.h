@@ -21,7 +21,7 @@ class Command
 {
 public:
     void insertSimpleCommand(SimpleCommand command);
-    void execute();
+    int execute();
     void print() const;
     void clear();
 
