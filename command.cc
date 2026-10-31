@@ -151,7 +151,7 @@ Command *parse(const std::vector<Token> &tokens)
         {
         case TOKEN_COMMAND:
         case TOKEN_ARGUMENT:
-            current.insertArgument(token.value);
+            current.insertArgument(token.value, !token.quoted);
             break;
 
         case TOKEN_PIPE:
@@ -203,9 +203,10 @@ Command *parse(const std::vector<Token> &tokens)
     return command;
 }
 
-void SimpleCommand::insertArgument(const std::string &argument)
+void SimpleCommand::insertArgument(const std::string &argument,
+                                   bool expandWildcards)
 {
-    if (argument.find_first_of("*?") == std::string::npos)
+    if (!expandWildcards || argument.find_first_of("*?") == std::string::npos)
     {
         _arguments.push_back(argument);
         return;

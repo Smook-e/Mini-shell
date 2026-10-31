@@ -9,7 +9,7 @@
 class SimpleCommand
 {
 public:
-    void insertArgument(const std::string &argument);
+    void insertArgument(const std::string &argument, bool expandWildcards = true);
     const std::vector<std::string> &arguments() const;
     std::size_t argumentCount() const;
 

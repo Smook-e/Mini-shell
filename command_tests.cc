@@ -36,6 +36,14 @@ void testTokenizer()
     assert(tokens[4].type == TOKEN_OR);
     assert(tokens[7].type == TOKEN_SEQUENCE);
     assert(tokens[10].type == TOKEN_EOF);
+
+    assert(setenv("MYSHELL_TEST_VAR", "hello world", 1) == 0);
+    tokens = tokenize("echo $MYSHELL_TEST_VAR ${MYSHELL_TEST_VAR} '$MYSHELL_TEST_VAR'");
+    assert(tokens.size() == 5);
+    assert(tokens[1].value == "hello world");
+    assert(tokens[2].value == "hello world");
+    assert(tokens[3].value == "$MYSHELL_TEST_VAR");
+    unsetenv("MYSHELL_TEST_VAR");
 }
 
 void testParsing()
@@ -47,6 +55,14 @@ void testParsing()
     assert(command->_simpleCommands[0].arguments()[1] == "input.txt");
     assert(command->_simpleCommands[1].arguments()[0] == "grep");
     assert(command->_outFile == "output.txt");
+    delete command;
+
+    command = parseCommand("ls>out|cat");
+    assert(command != nullptr);
+    assert(command->_simpleCommands.size() == 2);
+    assert(command->_simpleCommands[0].arguments()[0] == "ls");
+    assert(command->_outFile == "out");
+    assert(command->_simpleCommands[1].arguments()[0] == "cat");
     delete command;
 
     assert(parseCommand("") == nullptr);
@@ -80,6 +96,13 @@ void testWildcardExpansion()
     std::remove(first.c_str());
     std::remove(second.c_str());
     assert(rmdir(directory) == 0);
+
+    const std::vector<Token> tokens = tokenize("echo \"*.cc\"");
+    assert(tokens[1].quoted);
+    SimpleCommand quoted;
+    quoted.insertArgument(tokens[1].value, !tokens[1].quoted);
+    assert(quoted.argumentCount() == 1);
+    assert(quoted.arguments()[0] == "*.cc");
 }
 
 void testBuiltinCd()

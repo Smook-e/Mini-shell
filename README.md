@@ -89,6 +89,16 @@ expansion, background execution, errors, and cleanup. Run it with:
 Commands are resolved using the system `PATH`, so standard Unix programs such
 as `echo`, `cat`, `ls`, and `wc` can be run normally.
 
+Environment variables can be expanded with `$NAME` or `${NAME}`:
+
+```sh
+echo $HOME
+echo "Running in ${PWD}"
+```
+
+Expansion is performed in unquoted and double-quoted text. Variables inside
+single quotes remain literal.
+
 ### Pipelines
 
 Use `|` to connect the output of one command to the input of the next:
@@ -146,10 +156,12 @@ Wildcard expansion follows the csh-style behavior required by the assignment:
 - Each matching filename becomes a separate command argument.
 - Wildcards can appear in path components.
 - An unmatched wildcard remains unchanged.
+- Wildcards inside quotes are treated literally.
 - Filenames containing whitespace are not returned as wildcard matches.
 
 Examples:
 
+echo "*.cc"
 ```sh
 echo *
 echo *.cc
