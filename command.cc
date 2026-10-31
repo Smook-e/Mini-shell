@@ -412,7 +412,23 @@ void prompt()
 
     while (true)
     {
-        char *line = readline("myshell>");
+        char *currentDirectory = getcwd(nullptr, 0);
+        std::string directory;
+        if (currentDirectory)
+        {
+            directory = currentDirectory;
+            std::free(currentDirectory);
+        }
+        else
+        {
+            perror("getcwd");
+            directory = "?";
+        }
+
+        const std::string prompt =
+            "\001\033[1;36m\002" + directory +
+            "\001\033[0m\002\n$ ";
+        char *line = readline(prompt.c_str());
         if (!line)
             break;
 

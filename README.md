@@ -33,14 +33,17 @@ Start an interactive shell with:
 ./myshell
 ```
 
-The prompt is:
+The prompt displays the current working directory in color, followed by an
+input line:
 
 ```text
-myshell>
+/home/user/project
+$
 ```
 
 The interactive prompt uses GNU Readline, providing line editing and command
-history. Use the arrow keys to navigate previously entered commands.
+history. Use the arrow keys to navigate previously entered commands. The
+displayed path is refreshed after each command, including `cd`.
 
 Commands can also be provided through standard input:
 
