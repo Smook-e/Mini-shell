@@ -1,5 +1,7 @@
 # Mini Shell
 
+[![Build and test](https://github.com/Smook-e/10437_Lab3/actions/workflows/ci.yml/badge.svg)](https://github.com/Smook-e/10437_Lab3/actions/workflows/ci.yml)
+
 This project implements a small Unix shell in C++. The shell reads commands
 from standard input, expands wildcard arguments, creates pipelines, and
 executes external programs.

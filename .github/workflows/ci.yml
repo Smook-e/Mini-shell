@@ -1,0 +1,36 @@
+name: Build and test
+
+on:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            g++ \
+            make \
+            lsof \
+            libreadline-dev
+
+      - name: Build
+        run: make
+
+      - name: Run unit tests
+        run: make test
+
+      - name: Run sanitizer tests
+        run: make sanitizer
+
+      - name: Run file-descriptor check
+        run: make fd-check
