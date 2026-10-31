@@ -10,6 +10,7 @@ Requirements:
 
 - Linux or another POSIX-compatible operating system
 - `g++` with C++17 support
+- GNU Readline development headers and library
 - `make`
 
 Build the shell with:
@@ -37,6 +38,9 @@ The prompt is:
 ```text
 myshell>
 ```
+
+The interactive prompt uses GNU Readline, providing line editing and command
+history. Use the arrow keys to navigate previously entered commands.
 
 Commands can also be provided through standard input:
 

@@ -6,6 +6,8 @@
 #include <cstring>
 #include <fcntl.h>
 #include <glob.h>
+#include <readline/history.h>
+#include <readline/readline.h>
 #include <iostream>
 #include <signal.h>
 #include <string>
@@ -406,14 +408,19 @@ void Command::execute()
 
 void prompt()
 {
-    std::string input;
+    using_history();
+
     while (true)
     {
-        std::printf("myshell>");
-        std::fflush(stdout);
-        if (!std::getline(std::cin, input))
+        char *line = readline("myshell>");
+        if (!line)
             break;
 
+        if (*line != '\0')
+            add_history(line);
+
+        const std::string input(line);
+        std::free(line);
         const std::vector<Token> tokens = tokenize(input);
         Command *command = parse(tokens);
         if (command)
