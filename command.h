@@ -21,7 +21,7 @@ class Command
 {
 public:
     void insertSimpleCommand(SimpleCommand command);
-    int execute();
+    int execute(const std::string &jobText = {});
     void print() const;
     void clear();
 

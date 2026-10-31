@@ -6,7 +6,7 @@ SOURCES   := command.cc tokenizer.cc
 OBJECTS   := $(SOURCES:.cc=.o)
 TEST_TARGET := command_tests
 
-.PHONY: all run test sanitizer fd-check clean
+.PHONY: all run test sanitizer fd-check job-control clean
 
 all: $(TARGET)
 
@@ -30,6 +30,9 @@ sanitizer:
 
 fd-check: $(TARGET)
 	./tests/check_file_descriptors.sh
+
+job-control: $(TARGET)
+	python3 tests/check_job_control.py
 
 clean:
 	rm -f $(TARGET) $(TEST_TARGET) $(OBJECTS)

@@ -34,3 +34,6 @@ jobs:
 
       - name: Run file-descriptor check
         run: make fd-check
+
+      - name: Run job-control check
+        run: make job-control

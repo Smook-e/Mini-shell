@@ -74,6 +74,12 @@ Run the repeated pipeline and redirection file-descriptor check:
 make fd-check
 ```
 
+Run the pseudo-terminal job-control check:
+
+```sh
+make job-control
+```
+
 The test suite in [command_tests.cc](command_tests.cc) directly tests:
 
 - Tokenization and command parsing
@@ -146,6 +152,21 @@ sleep 2 &
 ```
 
 Child-process completion information is recorded in `shell.log`.
+
+### Job control
+
+Each pipeline runs in its own process group. Foreground jobs receive terminal
+input and signals such as `Ctrl-C` and `Ctrl-Z`, while background jobs do not.
+The shell provides these job-control built-ins:
+
+```sh
+jobs       # list jobs
+bg %1      # continue job 1 in the background
+fg %1      # continue job 1 in the foreground
+```
+
+Press `Ctrl-Z` to stop a foreground job and return to the shell prompt. Press
+`Ctrl-C` to terminate the foreground job without terminating the shell.
 
 ### Command lists
 

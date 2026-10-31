@@ -1,5 +1,7 @@
 #include "command.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -11,6 +13,7 @@
 #include <iostream>
 #include <signal.h>
 #include <string>
+#include <vector>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -18,6 +21,28 @@
 namespace
 {
 int logFd = -1;
+pid_t shellPgid = -1;
+bool interactiveShell = false;
+volatile sig_atomic_t childStatusPending = 0;
+
+enum class JobState
+{
+    Running,
+    Stopped,
+    Done
+};
+
+struct Job
+{
+    int id;
+    pid_t pgid;
+    std::string command;
+    JobState state = JobState::Running;
+    std::vector<pid_t> pids;
+};
+
+std::vector<Job> jobs;
+int nextJobId = 1;
 
 Command *parseError(const std::string &message, Command *command)
 {
@@ -54,11 +79,15 @@ void logChild(pid_t pid, int status)
             buffer, sizeof(buffer), "child %d terminated, exit status %d\n",
             static_cast<int>(pid), WEXITSTATUS(status));
     }
-    else
+    else if (WIFSIGNALED(status))
     {
         length = std::snprintf(
             buffer, sizeof(buffer), "child %d killed by signal %d\n",
             static_cast<int>(pid), WTERMSIG(status));
+    }
+    else
+    {
+        return;
     }
 
     if (logFd >= 0 && length > 0)
@@ -68,14 +97,7 @@ void logChild(pid_t pid, int status)
 #ifndef COMMAND_TEST_BUILD
 void childHandler(int)
 {
-    const int savedErrno = errno;
-    int status;
-    pid_t pid;
-
-    while ((pid = waitpid(-1, &status, WNOHANG)) > 0)
-        logChild(pid, status);
-
-    errno = savedErrno;
+    childStatusPending = 1;
 }
 
 void setupSignals()
@@ -85,14 +107,202 @@ void setupSignals()
         perror("shell.log");
 
     signal(SIGINT, SIG_IGN);
+    signal(SIGQUIT, SIG_IGN);
+    signal(SIGTSTP, SIG_IGN);
+    signal(SIGTTIN, SIG_IGN);
+    signal(SIGTTOU, SIG_IGN);
+
+    if (isatty(STDIN_FILENO))
+    {
+        interactiveShell = true;
+        shellPgid = getpid();
+        if (setpgid(shellPgid, shellPgid) < 0 && errno != EACCES)
+            perror("setpgid");
+        if (tcsetpgrp(STDIN_FILENO, shellPgid) < 0)
+            perror("tcsetpgrp");
+    }
 
     struct sigaction action{};
     action.sa_handler = childHandler;
     sigemptyset(&action.sa_mask);
-    action.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+    action.sa_flags = SA_RESTART;
     sigaction(SIGCHLD, &action, nullptr);
+    rl_catch_signals = 0;
 }
 #endif
+
+void resetChildSignals()
+{
+    signal(SIGINT, SIG_DFL);
+    signal(SIGQUIT, SIG_DFL);
+    signal(SIGTSTP, SIG_DFL);
+    signal(SIGTTIN, SIG_DFL);
+    signal(SIGTTOU, SIG_DFL);
+    signal(SIGCHLD, SIG_DFL);
+}
+
+Job *findJob(int id)
+{
+    for (Job &job : jobs)
+        if (job.id == id)
+            return &job;
+    return nullptr;
+}
+
+Job *findJobByPid(pid_t pid)
+{
+    for (Job &job : jobs)
+        for (pid_t jobPid : job.pids)
+            if (jobPid == pid)
+                return &job;
+    return nullptr;
+}
+
+void removeDoneJobs()
+{
+    jobs.erase(std::remove_if(jobs.begin(), jobs.end(),
+                              [](const Job &job)
+                              { return job.state == JobState::Done; }),
+               jobs.end());
+}
+
+void reapChildren()
+{
+    int status;
+    pid_t pid;
+    while ((pid = waitpid(-1, &status,
+                          WNOHANG | WUNTRACED | WCONTINUED)) > 0)
+    {
+        Job *job = findJobByPid(pid);
+        if (!job)
+            continue;
+
+        if (WIFSTOPPED(status))
+            job->state = JobState::Stopped;
+        else if (WIFCONTINUED(status))
+            job->state = JobState::Running;
+        else if (WIFEXITED(status) || WIFSIGNALED(status))
+        {
+            logChild(pid, status);
+            job->pids.erase(std::remove(job->pids.begin(), job->pids.end(), pid),
+                            job->pids.end());
+            if (job->pids.empty())
+                job->state = JobState::Done;
+        }
+    }
+    childStatusPending = 0;
+}
+
+int parseJobId(const std::string &argument)
+{
+    if (argument.size() < 2 || argument[0] != '%' ||
+        !std::all_of(argument.begin() + 1, argument.end(),
+                     [](unsigned char character)
+                     { return std::isdigit(character); }))
+        return -1;
+    return std::stoi(argument.substr(1));
+}
+
+int waitForJob(Job &job, bool foreground)
+{
+    if (foreground && interactiveShell &&
+        tcsetpgrp(STDIN_FILENO, job.pgid) < 0)
+        perror("tcsetpgrp");
+
+    int status = 0;
+    while (!job.pids.empty())
+    {
+        const pid_t pid = waitpid(-job.pgid, &status, WUNTRACED);
+        if (pid < 0)
+        {
+            if (errno == EINTR)
+                continue;
+            if (errno == ECHILD)
+                break;
+            perror("waitpid");
+            break;
+        }
+
+        if (WIFSTOPPED(status))
+        {
+            job.state = JobState::Stopped;
+            std::printf("[%d]+ Stopped %s\n", job.id, job.command.c_str());
+            break;
+        }
+
+        logChild(pid, status);
+        job.pids.erase(std::remove(job.pids.begin(), job.pids.end(), pid),
+                       job.pids.end());
+    }
+
+    if (foreground && interactiveShell &&
+        tcsetpgrp(STDIN_FILENO, shellPgid) < 0)
+        perror("tcsetpgrp");
+
+    if (job.pids.empty())
+    {
+        job.state = JobState::Done;
+        return WIFEXITED(status) ? WEXITSTATUS(status)
+                                 : 128 + WTERMSIG(status);
+    }
+    return 128 + (WIFSTOPPED(status) ? WSTOPSIG(status) : SIGTSTP);
+}
+
+void printJobs()
+{
+    reapChildren();
+    for (const Job &job : jobs)
+    {
+        const char *state = job.state == JobState::Running
+                                ? "Running"
+                                : job.state == JobState::Stopped ? "Stopped"
+                                                                 : "Done";
+        std::printf("[%d] %-7s %s\n", job.id, state, job.command.c_str());
+    }
+    removeDoneJobs();
+}
+
+bool jobControlBuiltin(const std::vector<std::string> &arguments, int &status)
+{
+    if (arguments[0] == "jobs")
+    {
+        printJobs();
+        status = 0;
+        return true;
+    }
+
+    if (arguments[0] != "fg" && arguments[0] != "bg")
+        return false;
+    if (arguments.size() != 2)
+    {
+        std::fprintf(stderr, "%s: usage: %s %%job\n", arguments[0].c_str(),
+                     arguments[0].c_str());
+        status = 2;
+        return true;
+    }
+
+    Job *job = findJob(parseJobId(arguments[1]));
+    if (!job)
+    {
+        std::fprintf(stderr, "%s: job not found: %s\n", arguments[0].c_str(),
+                     arguments[1].c_str());
+        status = 1;
+        return true;
+    }
+
+    if (kill(-job->pgid, SIGCONT) < 0)
+    {
+        perror("SIGCONT");
+        status = 1;
+        return true;
+    }
+    job->state = JobState::Running;
+    if (arguments[0] == "fg")
+        status = waitForJob(*job, true);
+    else
+        status = 0;
+    return true;
+}
 
 void redirectInput(const Command &command)
 {
@@ -285,6 +495,10 @@ int runBuiltin(const SimpleCommand &command)
         return -1;
 
     const std::vector<std::string> &arguments = command.arguments();
+    int jobStatus = 0;
+    if (jobControlBuiltin(arguments, jobStatus))
+        return jobStatus;
+
     if (arguments[0] == "exit")
     {
         std::printf("Good bye!!\n");
@@ -321,7 +535,7 @@ bool builtin(const SimpleCommand &command)
     return runBuiltin(command) >= 0;
 }
 
-int Command::execute()
+int Command::execute(const std::string &jobText)
 {
     if (_simpleCommands.size() == 1)
     {
@@ -334,7 +548,9 @@ int Command::execute()
     }
 
     int previousRead = -1;
-    pid_t lastPid = -1;
+    pid_t processGroup = 0;
+    std::vector<pid_t> childPids;
+    int launchStatus = 0;
 
     for (std::size_t i = 0; i < _simpleCommands.size(); ++i)
     {
@@ -349,6 +565,7 @@ int Command::execute()
         if (pid < 0)
         {
             perror("fork");
+            launchStatus = 1;
             if (pipeEnds[0] >= 0)
             {
                 close(pipeEnds[0]);
@@ -359,7 +576,10 @@ int Command::execute()
 
         if (pid == 0)
         {
-            signal(SIGINT, SIG_DFL);
+            resetChildSignals();
+            const pid_t childPgid = processGroup == 0 ? getpid() : processGroup;
+            if (setpgid(0, childPgid) < 0)
+                _exit(1);
 
             if (previousRead >= 0)
                 dup2(previousRead, STDIN_FILENO);
@@ -391,6 +611,12 @@ int Command::execute()
             _exit(127);
         }
 
+        if (processGroup == 0)
+            processGroup = pid;
+        if (setpgid(pid, processGroup) < 0 && errno != EACCES)
+            perror("setpgid");
+        childPids.push_back(pid);
+
         if (previousRead >= 0)
             close(previousRead);
         if (i + 1 < _simpleCommands.size())
@@ -402,26 +628,35 @@ int Command::execute()
         {
             previousRead = -1;
         }
-        lastPid = pid;
     }
 
     if (previousRead >= 0)
         close(previousRead);
 
-    int exitStatus = _background ? 0 : 1;
-    if (!_background && lastPid > 0)
+    if (launchStatus != 0 || processGroup == 0)
     {
-        int status;
-        pid_t result;
-        while ((result = waitpid(lastPid, &status, 0)) < 0 && errno == EINTR)
-        {
-        }
-        if (result > 0)
-        {
-            logChild(result, status);
-            exitStatus = WIFEXITED(status) ? WEXITSTATUS(status)
-                                           : 128 + WTERMSIG(status);
-        }
+        clear();
+        return 1;
+    }
+
+    Job job{nextJobId++, processGroup, jobText, JobState::Running, childPids};
+    jobs.push_back(job);
+    Job &storedJob = jobs.back();
+
+    int exitStatus = 0;
+    if (_background)
+    {
+        std::printf("[%d] %d\n", storedJob.id, static_cast<int>(processGroup));
+    }
+    else
+    {
+        const int foregroundJobId = storedJob.id;
+        exitStatus = waitForJob(storedJob, true);
+        if (storedJob.state == JobState::Done)
+            jobs.erase(std::remove_if(jobs.begin(), jobs.end(),
+                                      [foregroundJobId](const Job &candidate)
+                                      { return candidate.id == foregroundJobId; }),
+                       jobs.end());
     }
 
     clear();
@@ -503,7 +738,7 @@ int executeLine(const std::string &input)
             (connector == TOKEN_AND && previousStatus == 0) ||
             (connector == TOKEN_OR && previousStatus != 0);
         if (shouldRun)
-            previousStatus = command->execute();
+            previousStatus = command->execute(input);
         delete command;
 
         havePreviousCommand = true;
@@ -519,6 +754,7 @@ void prompt()
 
     while (true)
     {
+        reapChildren();
         char *currentDirectory = getcwd(nullptr, 0);
         std::string directory;
         if (currentDirectory)
