@@ -3,7 +3,6 @@
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -36,12 +35,11 @@ void testParsing()
 {
     Command *command = parseCommand("cat input.txt | grep shell > output.txt");
     assert(command != nullptr);
-    assert(command->_numberOfSimpleCommands == 2);
-    assert(command->_simpleCommands[0]->_arguments[0] != nullptr);
-    assert(std::strcmp(command->_simpleCommands[0]->_arguments[0], "cat") == 0);
-    assert(std::strcmp(command->_simpleCommands[0]->_arguments[1], "input.txt") == 0);
-    assert(std::strcmp(command->_simpleCommands[1]->_arguments[0], "grep") == 0);
-    assert(std::strcmp(command->_outFile, "output.txt") == 0);
+    assert(command->_simpleCommands.size() == 2);
+    assert(command->_simpleCommands[0].arguments()[0] == "cat");
+    assert(command->_simpleCommands[0].arguments()[1] == "input.txt");
+    assert(command->_simpleCommands[1].arguments()[0] == "grep");
+    assert(command->_outFile == "output.txt");
     delete command;
 
     assert(parseCommand("") == nullptr);
@@ -63,13 +61,13 @@ void testWildcardExpansion()
     const std::string original = getcwd(nullptr, 0);
     assert(chdir(directory) == 0);
     SimpleCommand command;
-    command.insertArgument(strdup("*.cc"));
-    assert(command._numberOfArguments == 2);
-    assert(std::strcmp(command._arguments[0], "alpha.cc") == 0);
-    assert(std::strcmp(command._arguments[1], "beta.cc") == 0);
-    command.insertArgument(strdup("*.missing"));
-    assert(command._numberOfArguments == 3);
-    assert(std::strcmp(command._arguments[2], "*.missing") == 0);
+    command.insertArgument("*.cc");
+    assert(command.argumentCount() == 2);
+    assert(command.arguments()[0] == "alpha.cc");
+    assert(command.arguments()[1] == "beta.cc");
+    command.insertArgument("*.missing");
+    assert(command.argumentCount() == 3);
+    assert(command.arguments()[2] == "*.missing");
     assert(chdir(original.c_str()) == 0);
 
     std::remove(first.c_str());
@@ -81,9 +79,9 @@ void testBuiltinCd()
 {
     const std::string original = getcwd(nullptr, 0);
     SimpleCommand command;
-    command.insertArgument(strdup("cd"));
-    command.insertArgument(strdup("/tmp"));
-    assert(builtin(&command));
+    command.insertArgument("cd");
+    command.insertArgument("/tmp");
+    assert(builtin(command));
     assert(std::string(getcwd(nullptr, 0)) == "/tmp");
     assert(chdir(original.c_str()) == 0);
 }

@@ -1,47 +1,40 @@
+#ifndef COMMAND_H
+#define COMMAND_H
 
-#ifndef command_h
-#define command_h
+#include "tokenizer.h"
 
 #include <string>
 #include <vector>
-#include "tokenizer.h"
 
-struct SimpleCommand
+class SimpleCommand
 {
-	int _numberOfAvailableArguments;
-	int _numberOfArguments;
-	char **_arguments;
+public:
+    void insertArgument(const std::string &argument);
+    const std::vector<std::string> &arguments() const;
+    std::size_t argumentCount() const;
 
-	SimpleCommand();
-	void insertArgument(char *argument);
+private:
+    std::vector<std::string> _arguments;
 };
 
-struct Command
+class Command
 {
-	int _numberOfAvailableSimpleCommands;
-	int _numberOfSimpleCommands;
-	SimpleCommand **_simpleCommands;
-	char *_outFile;
-	char *_inputFile;
-	char *_errFile;
-	int  _out_error;
-	int _background;
-	int _append;
+public:
+    void insertSimpleCommand(SimpleCommand command);
+    void execute();
+    void print() const;
+    void clear();
 
-	void prompt();
-	void print();
-	void execute();
-	void clear();
-
-	Command();
-	~Command();
-	void insertSimpleCommand(SimpleCommand *simpleCommand);
-
-	static Command _currentCommand;
-	static SimpleCommand *_currentSimpleCommand;
+    std::vector<SimpleCommand> _simpleCommands;
+    std::string _outFile;
+    std::string _inputFile;
+    std::string _errFile;
+    bool _outError = false;
+    bool _background = false;
+    bool _append = false;
 };
 
-Command *parse(std::vector<Token> &tokens);
-bool builtin(SimpleCommand *sc);
+Command *parse(const std::vector<Token> &tokens);
+bool builtin(const SimpleCommand &command);
 
 #endif

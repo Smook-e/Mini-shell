@@ -1,3 +1,5 @@
 *.o
 *.d
 *.log
+command_tests
+myshell
