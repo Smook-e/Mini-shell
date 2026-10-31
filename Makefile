@@ -6,7 +6,7 @@ SOURCES   := command.cc tokenizer.cc
 OBJECTS   := $(SOURCES:.cc=.o)
 TEST_TARGET := command_tests
 
-.PHONY: all run test clean
+.PHONY: all run test sanitizer fd-check clean
 
 all: $(TARGET)
 
@@ -24,6 +24,12 @@ $(TEST_TARGET): command.cc tokenizer.cc command.h tokenizer.h command_tests.cc
 
 test: $(TEST_TARGET)
 	./$(TEST_TARGET)
+
+sanitizer:
+	./tests/run_sanitizer.sh
+
+fd-check: $(TARGET)
+	./tests/check_file_descriptors.sh
 
 clean:
 	rm -f $(TARGET) $(TEST_TARGET) $(OBJECTS)

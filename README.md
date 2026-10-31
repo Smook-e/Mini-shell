@@ -59,6 +59,19 @@ Build and run the C++ test suite with:
 make test
 ```
 
+Run the test suite with AddressSanitizer, UndefinedBehaviorSanitizer, and
+leak detection enabled:
+
+```sh
+make sanitizer
+```
+
+Run the repeated pipeline and redirection file-descriptor check:
+
+```sh
+make fd-check
+```
+
 The test suite in [command_tests.cc](command_tests.cc) directly tests:
 
 - Tokenization and command parsing

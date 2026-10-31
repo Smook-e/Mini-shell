@@ -81,7 +81,10 @@ void testWildcardExpansion()
     std::ofstream(first).close();
     std::ofstream(second).close();
 
-    const std::string original = getcwd(nullptr, 0);
+    char *originalDirectory = getcwd(nullptr, 0);
+    assert(originalDirectory != nullptr);
+    const std::string original = originalDirectory;
+    std::free(originalDirectory);
     assert(chdir(directory) == 0);
     SimpleCommand command;
     command.insertArgument("*.cc");
@@ -107,12 +110,18 @@ void testWildcardExpansion()
 
 void testBuiltinCd()
 {
-    const std::string original = getcwd(nullptr, 0);
+    char *originalDirectory = getcwd(nullptr, 0);
+    assert(originalDirectory != nullptr);
+    const std::string original = originalDirectory;
+    std::free(originalDirectory);
     SimpleCommand command;
     command.insertArgument("cd");
     command.insertArgument("/tmp");
     assert(builtin(command));
-    assert(std::string(getcwd(nullptr, 0)) == "/tmp");
+    char *currentDirectory = getcwd(nullptr, 0);
+    assert(currentDirectory != nullptr);
+    assert(std::string(currentDirectory) == "/tmp");
+    std::free(currentDirectory);
     assert(chdir(original.c_str()) == 0);
 }
 
