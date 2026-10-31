@@ -36,5 +36,6 @@ public:
 
 Command *parse(const std::vector<Token> &tokens);
 bool builtin(const SimpleCommand &command);
+int executeLine(const std::string &input);
 
 #endif

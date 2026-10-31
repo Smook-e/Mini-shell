@@ -29,6 +29,13 @@ void testTokenizer()
     assert(tokens[5].type == TOKEN_APPEND);
     assert(tokens[6].type == TOKEN_ARGUMENT && tokens[6].value == "output.txt");
     assert(tokens[7].type == TOKEN_EOF);
+
+    tokens = tokenize("false && echo no || echo yes; echo done");
+    assert(tokens.size() == 11);
+    assert(tokens[1].type == TOKEN_AND);
+    assert(tokens[4].type == TOKEN_OR);
+    assert(tokens[7].type == TOKEN_SEQUENCE);
+    assert(tokens[10].type == TOKEN_EOF);
 }
 
 void testParsing()
@@ -112,6 +119,33 @@ void testExecutionAndRedirection()
     command->execute();
     delete command;
 }
+
+void testCommandLists()
+{
+    char filename[] = "/tmp/myshell-command-list-XXXXXX";
+    const int fd = mkstemp(filename);
+    assert(fd >= 0);
+    close(fd);
+    std::remove(filename);
+
+    assert(executeLine(std::string("false && printf skipped > ") + filename) != 0);
+    assert(access(filename, F_OK) != 0);
+
+    assert(executeLine(std::string("true || printf skipped > ") + filename) == 0);
+    assert(access(filename, F_OK) != 0);
+
+    assert(executeLine(std::string("false || printf fallback > ") + filename) == 0);
+    std::ifstream output(filename);
+    std::string contents;
+    std::getline(output, contents);
+    assert(contents == "fallback");
+    output.close();
+    std::remove(filename);
+
+    assert(executeLine("true; false; true") == 0);
+    assert(executeLine("false; true") == 0);
+    assert(executeLine("true &&") != 0);
+}
 }
 
 int main()
@@ -121,6 +155,7 @@ int main()
     testWildcardExpansion();
     testBuiltinCd();
     testExecutionAndRedirection();
+    testCommandLists();
     std::cout << "All command tests passed\n";
     return 0;
 }

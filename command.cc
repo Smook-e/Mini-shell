@@ -427,6 +427,91 @@ int Command::execute()
     return exitStatus;
 }
 
+int executeLine(const std::string &input)
+{
+    const std::vector<Token> tokens = tokenize(input);
+
+    bool validCommandList = true;
+    bool previousWasSeparator = true;
+    TokenType lastSeparator = TOKEN_SEQUENCE;
+    for (const Token &token : tokens)
+    {
+        if (token.type == TOKEN_EOF)
+            break;
+
+        const bool isSeparator = token.type == TOKEN_SEQUENCE ||
+                                 token.type == TOKEN_AND ||
+                                 token.type == TOKEN_OR;
+        if (!isSeparator)
+        {
+            previousWasSeparator = false;
+            continue;
+        }
+
+        if (previousWasSeparator)
+        {
+            std::fprintf(stderr, "myshell: unexpected separator '%s'\n",
+                         token.value.c_str());
+            validCommandList = false;
+            break;
+        }
+        previousWasSeparator = true;
+        lastSeparator = token.type;
+    }
+    if (validCommandList && previousWasSeparator &&
+        (lastSeparator == TOKEN_AND || lastSeparator == TOKEN_OR))
+    {
+        std::fprintf(stderr, "myshell: missing command after '%s'\n",
+                     lastSeparator == TOKEN_AND ? "&&" : "||");
+        validCommandList = false;
+    }
+    if (!validCommandList)
+        return 2;
+
+    std::size_t commandStart = 0;
+    TokenType connector = TOKEN_SEQUENCE;
+    int previousStatus = 0;
+    bool havePreviousCommand = false;
+
+    for (std::size_t i = 0; i < tokens.size(); ++i)
+    {
+        const TokenType type = tokens[i].type;
+        const bool isSeparator = type == TOKEN_SEQUENCE ||
+                                 type == TOKEN_AND || type == TOKEN_OR ||
+                                 type == TOKEN_EOF;
+        if (!isSeparator)
+            continue;
+
+        if (i == commandStart)
+        {
+            std::fprintf(stderr, "myshell: missing command near '%s'\n",
+                         tokens[i].value.empty() ? "end of line"
+                                                 : tokens[i].value.c_str());
+            return 2;
+        }
+
+        std::vector<Token> commandTokens(tokens.begin() + commandStart,
+                                         tokens.begin() + i);
+        commandTokens.push_back({TOKEN_EOF, ""});
+        Command *command = parse(commandTokens);
+        if (!command)
+            return 2;
+
+        const bool shouldRun =
+            !havePreviousCommand || connector == TOKEN_SEQUENCE ||
+            (connector == TOKEN_AND && previousStatus == 0) ||
+            (connector == TOKEN_OR && previousStatus != 0);
+        if (shouldRun)
+            previousStatus = command->execute();
+        delete command;
+
+        havePreviousCommand = true;
+        connector = type;
+        commandStart = i + 1;
+    }
+    return previousStatus;
+}
+
 void prompt()
 {
     using_history();
@@ -458,86 +543,7 @@ void prompt()
 
         const std::string input(line);
         std::free(line);
-        const std::vector<Token> tokens = tokenize(input);
-
-        bool validCommandList = true;
-        bool previousWasSeparator = true;
-        TokenType lastSeparator = TOKEN_SEQUENCE;
-        for (const Token &token : tokens)
-        {
-            if (token.type == TOKEN_EOF)
-                break;
-
-            const bool isSeparator = token.type == TOKEN_SEQUENCE ||
-                                     token.type == TOKEN_AND ||
-                                     token.type == TOKEN_OR;
-            if (!isSeparator)
-            {
-                previousWasSeparator = false;
-                continue;
-            }
-
-            if (previousWasSeparator)
-            {
-                std::fprintf(stderr, "myshell: unexpected separator '%s'\n",
-                             token.value.c_str());
-                validCommandList = false;
-                break;
-            }
-            previousWasSeparator = true;
-            lastSeparator = token.type;
-        }
-        if (validCommandList && previousWasSeparator &&
-            (lastSeparator == TOKEN_AND || lastSeparator == TOKEN_OR))
-        {
-            std::fprintf(stderr, "myshell: missing command after '%s'\n",
-                         lastSeparator == TOKEN_AND ? "&&" : "||");
-            validCommandList = false;
-        }
-        if (!validCommandList)
-            continue;
-
-        std::size_t commandStart = 0;
-        TokenType connector = TOKEN_SEQUENCE;
-        int previousStatus = 0;
-        bool havePreviousCommand = false;
-
-        for (std::size_t i = 0; i < tokens.size(); ++i)
-        {
-            const TokenType type = tokens[i].type;
-            const bool isSeparator = type == TOKEN_SEQUENCE ||
-                                     type == TOKEN_AND || type == TOKEN_OR ||
-                                     type == TOKEN_EOF;
-            if (!isSeparator)
-                continue;
-
-            if (i == commandStart)
-            {
-                std::fprintf(stderr, "myshell: missing command near '%s'\n",
-                             tokens[i].value.empty() ? "end of line"
-                                                     : tokens[i].value.c_str());
-                break;
-            }
-
-            std::vector<Token> commandTokens(tokens.begin() + commandStart,
-                                             tokens.begin() + i);
-            commandTokens.push_back({TOKEN_EOF, ""});
-            Command *command = parse(commandTokens);
-            if (!command)
-                break;
-
-            const bool shouldRun =
-                !havePreviousCommand || connector == TOKEN_SEQUENCE ||
-                (connector == TOKEN_AND && previousStatus == 0) ||
-                (connector == TOKEN_OR && previousStatus != 0);
-            if (shouldRun)
-                previousStatus = command->execute();
-            delete command;
-
-            havePreviousCommand = true;
-            connector = type;
-            commandStart = i + 1;
-        }
+        executeLine(input);
     }
 }
 
